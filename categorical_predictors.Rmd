@@ -1,0 +1,407 @@
+---
+title: "Categorical Predictors"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(faraway)
+library(MASS)
+library(tidyverse)
+```
+
+- Predictors that are qualitative in nature are sometimes described as _categorical_ or called _factors_.  
+- The different categories of a factor variable are called _levels_.  
+- We wish to incorporate these predictors into the regression analysis. We start with the example of a factor with just two levels, then show how to introduce quantitative predictors into the model and end with an example using a factor with more than two levels.
+
+## A two-level factor
+We take a look at the data and produce a summary subsetted by `csa`:
+```{r}
+data(sexab)
+head(sexab)
+by(sexab, sexab$csa, summary)
+```
+
+Now plot the data:
+```{r}
+plot(ptsd ~ csa, sexab)
+plot(ptsd ~ cpa, pch = as.character(csa), sexab)
+```
+
+We see that those in the abused group have higher levels of PTSD than those in the non-abused in the left panel. 
+
+We can test this difference:
+```{r}
+# Assume that the variance is eqaul in the two groups.
+t.test(ptsd ~ csa, sexab, var.equal = TRUE)
+```
+Since p-value is less than 0.05, we find that it is clearly significant. 
+
+Our strategy is to incorporate qualitative predictors within the $Y = X\beta + \epsilon$ framework. We can then use the estimation, inferential and diagnostic techiniques.  
+
+- To put qulitative predictors into the $Y = X\beta + \epsilon$ form we need to code the qualitative predictors.  
+- We can do this using _dummy variables_.  
+- For a catetgorial predictor (or factor) with two levels, we define dummy variables $d_{1}$ and $d_{2}$:
+\begin{equation*}
+  d_{i}=
+  \begin{cases}
+    0 & \text{is not level i} \\
+    1 & \text{is level i}
+  \end{cases}
+\end{equation*}
+
+Let's create dummy variables and fit them using a linear model:
+```{r}
+d1 <- ifelse(sexab$csa == "Abused", 1, 0)
+d2 <- ifelse(sexab$csa == "NotAbused", 1, 0)
+lmod <- lm(ptsd ~ d1 + d2, sexab)
+summary(lmod)
+```
+
+We can see a warning about singularities and that the parameter for the second dummy variables has not been estimated.  
+
+The cause of this problem can be revealed by studying the X model matrix:
+```{r}
+model.matrix(lmod)
+```
+
+- We can see that the sum of the second and third columns equals the first column.  
+- This means that X is not of full rank, having a rank of two, not three.  
+- Hence not all the parameters can be identifide. 
+
+We have more parameteres than we need so the solution is to get rid of one of them. Once choice would be to eliminate $d_{1}$:
+```{r}
+lmod <- lm(ptsd ~ d2, sexab)
+summary(lmod)
+```
+
+Compare to the output of the t-test:
+```{r}
+t.test(ptsd ~ csa, sexab, var.equal = TRUE)
+```
+
+- The intercept of 11.941 is the eman of the first group ("Abused").  
+- The parameter for $d_{2}$ represents the difference between the second and the first group, i.e., 11.941 - 7.245 = 4.694.  
+- The t-value for $d_{2}$ of -8.94 is the test statistic for the test that the difference is zero and is identical (excepting the sign) to the test statistic from the t-test.  
+- One assumption of the linear model is that the variacnes of the errors are equal which explains why we specified this option when computing the t-test earlier.  
+
+An alternative approach is to eliminate the intercept term:
+```{r}
+lmod <- lm(ptsd ~ d1 + d2 -1, sexab)
+summary(lmod)
+```
+
+Advantages:
+
+- The means of the two groups are directly supplied by the parameter estiamtes of the two dummy variables.  
+
+Disadvantages:
+
+- We do not get the t-test for the difference.  
+- The tests in the output correspond to hypotheses claiming the mean response in the group is zero.  
+- These are not interesting because these hypotheses are unbelievable.  
+- The solution of dropping the intercept only works when there is a single factor and does not generalize to the multiple factor case.  
+- The $R^2$ is not correctly computed when the intercept is omitted.  
+
+For these reasons, we prefer approach of dropping one of the dummy variables to dropping the intercept.  
+
+It is not necessary to explicitly form the dummy variables as R can produce these directly by just including the factor in the model formula:
+```{r}
+lmod <- lm(ptsd ~ csa, sexab)
+summary(lmod)
+```
+
+We can check that `csa` is a factor variable:
+```{r}
+class(sexab$csa)
+```
+
+- This usually happens automatically when a variable takes non-numeric values.  
+- It can be imposed directly if necessary using the `factor()` command.  
+- The dummy variables are created but one is dropped to ensure identifiability.  
+- This is known as the _reference level_.  
+- In this example, the reference level is "Abused".  
+- The mean response for the reference level is encoded in the intercept of 11.941.  
+- The parameter estimate for "NotAbused" of -7.245 is the difference from the reference level.  
+- Hence the mean response for the "NotAbused" level is 11.941 - 7.245 = 4.696.
+
+Reference Levels:  
+
+- The choice of reference level is arbitrary.  
+- The default choice of reference level by R is the first level in alphabetical order.  
+- Because this choice is inconvenient, we change the reference level using the `relevel` command.  
+
+Change the reference level using the `relevel`:
+```{r}
+sexab$csa <- relevel(sexab$csa, ref = "NotAbused")
+lmod <- lm(ptsd ~ csa, sexab)
+summary(lmod)
+```
+
+A comparison of the outputs reveals that the fitted values and residuals are the same for either choice. But the parametrization is different.  
+
+## Factors and Quantitative Predictors
+Suppose we have a response y, a quantitative predictor x and a two-level factor variable represented by a dummy variable d:  
+\begin{equation*}
+  d =
+  \begin{cases}
+    0 & \text{reference level} \\
+    1 & \text{treatment level}
+  \end{cases}
+\end{equation*}
+
+Several possible linear models may be considered here:  
+
+1. The same regression line for both levels: y ~ x  
+2. A factor predictor but no quantitative predictor: y ~ d  
+3. Separate regression lines for each group with the same slope: y ~ x + d  
+4. Separate regression lines for each group with the different slopes: y ~ x + d + x:d or y ~ x*d  
+
+We start with the separate regression lines model:
+```{r}
+lmod4 <- lm(ptsd~ cpa + csa +cpa:csa, sexab)
+summary(lmod4)
+```
+
+The model can be simplified becasue the interaction term is not significant. 
+
+We can discover the coding by examining the X-matrix:
+```{r}
+model.matrix(lmod4)
+```
+
+The interaction term `cpa:csaAbused` = (2nd column) * (3rd column).  
+
+We showed that the fitted regression lines:
+```{r}
+plot(ptsd ~ cpa, sexab, pch=as.numeric(csa))
+abline(3.96, 0.784)
+abline(3.96 + 6.86, 0.764-0.314, lty=2)
+```
+
+We reduce to this model:
+```{r}
+lmod3 <- lm(ptsd~ cpa + csa, sexab)
+summary(lmod3)
+```
+
+No further simplification is possible because the remaining predictors are statistically significant.  
+
+Put the parallel regrssion lines on the plot:
+```{r}
+plot(ptsd ~ cpa, sexab, pch=as.numeric(csa))
+abline(3.96, 0.5551)
+abline(3.96 + 6.86, 0.5551, lty=2)
+```
+
+- The slope of bothe lines is 0.5551, but the "Abused" line is 6.273 higher than the "NonAbused."  
+- From the t-test earlier, the unadjusted estimated effect of childhood sexual abuse is 7.245.  
+- So after adjusting for the effect of childhood physical abuse, our estimate of the effect of childhood sexual abuse on PTSD is midlly reduced.  
+
+We can also compare confidence interval for the effect of `csa`:
+```{r}
+confint(lmod3)[3,]
+```
+
+- Compare to the (5.6302, 8.8603) found for the unadjusted difference.  
+- The confidence intervals are about the same width.  
+
+The usual diagnostics should be checked. It is worth checking whether there is ssome difference related to the categorical variable:
+```{r}
+plot(fitted(lmod3),residuals(lmod3),pch=as.numeric(sexab$csa),
+     xlab="Fitted",ylab="Residuals")
+```
+
+- We see that there are no clear problems.  
+- The variation in the two group is about the same.  
+- If this were not so, we would need to make some adjustments to the analysis, possibly using weights.  
+
+We have seen that the effect of `csa` can be adjusted for `cpa`. The reverse is also true. Consider a model with just `cpa`:
+```{r}
+lmod1 <- lm(ptsd ~ cpa, sexab)
+summary(lmod1)
+```
+
+After adjusting for the effect of `csa`, we see size of the effect of `cpa` is reduced from 1.044 to 0.551.  
+
+## Interpretation with Interaction Term
+
+```{r}
+data(whiteside)
+```
+
+We plot the data:
+```{r}
+ggplot(aes(x=Temp,y=Gas),data=whiteside)+
+  geom_point()+
+  facet_grid(~Insul)+
+  geom_smooth(method="lm")
+```
+
+We can see that less gas is used after the insulation is installed but the difference varies by temperature.  
+
+The relationships appear linear so we fit a model:
+```{r}
+lmod <- lm(Gas ~ Temp*Insul, whiteside)
+summary(lmod)
+```
+
+- The gas consumption would fall by 0.393 for each 1 Cel. increase in temperature before insulation.  
+- After insulation, the fall in consumption per degree is only 0.393 - 0.115 = 0.278.  
+- The interpretation for the other two parameter estimates is more problematic since these represent prediced consumption when the temperature is zero.  
+
+The solution is to center the temperature predictor by its mean value and recompute the linear model:
+```{r}
+mean(whiteside$Temp)
+whiteside$ctemp <- whiteside$Temp - mean(whiteside$Temp)
+lmodc <- lm(Gas ~ ctemp*Insul, whiteside)
+sumary(lmodc)
+```
+
+- The average consumption before insulation at the average temperature was 4.94 and 4.94 - 1.57 = 3.37 afterwards.  
+- The other two coefficients are unchanged and their interpretation remains the same.  
+- Thus we can see that centering allows a more natural interpretation of parameter estimates in the presence of interaction.  
+
+## Factors With More Than Two Levels
+
+Suppose we have a factor with $f$ levels, then we create $f - 1$ dummy variables $d_{2}, ..., d_{j}$ where:
+\begin{equation*}
+  d_{i} =
+  \begin{cases}
+    0 & \text{is not level i} \\
+    1 & \text{is level i}
+  \end{cases}
+\end{equation*}
+
+We start with a plot of data:
+```{r}
+data("fruitfly")
+plot(longevity ~ thorax, fruitfly, pch=unclass(activity))
+legend(0.63,100,levels(fruitfly$activity),pch=1:5)
+```
+
+- With multiple levels, it can be hard to distinguish the groups.  
+- Sometimes it is better to plot each level separately.  
+
+This can be achieved nicely with the help of the `ggplot2` pacakge:
+```{r}
+ggplot(aes(x=thorax,y=longevity),data=fruitfly) + 
+  geom_point() +
+  facet_wrap( ~ activity)
+```
+
+The plot makes it clearer that longevity for the high sexual activity group is lower.  
+
+We fit and summarize the most genetral linear model:
+```{r}
+lmod <- lm(longevity ~ thorax*activity, fruitfly)
+summary(lmod)
+```
+
+- Since "isolated" is the reference level, the fitted regression line within this group is `longevity` = -50.2 + 136.1*`thorax`.  
+- For "many," it is `longevity` = (-50.2-1.1) + (136.1+6.5)*`thorax`.  
+
+Examine:
+```{r, results=FALSE}
+model.matrix(lmod)
+```
+
+to see how the coding is done.  
+
+Some diagnostics should be examined by:
+```{r}
+plot(lmod)
+```
+
+Now we see whether the model can be simplified. The model summary output is not suitable for this purpose because there are four t-tests corresponding to the interaction term while we want just a single test for this term.  
+
+We can obtain this using:
+```{r}
+anova(lmod)
+```
+
+- This is a sequential analysis of variance (ANOVA) table.  
+- Starting from a null model, terms are added and sequentially tested.  
+- The interactio term `thorax:activity` is not significant, indicating that we can the same slope within each group.  
+- No further simplication is possible.  
+
+We now refit without the interaction term:
+```{r}
+lmodp <- lm(longevity ~ thorax+activity, fruitfly)
+```
+
+We might prefer to check whether each predictor is significant once the other has been taken into account.  
+
+We can do this using:
+```{r}
+drop1(lmodp, test="F")
+```
+
+The `drop1()` command tests each term relative o the full model. This shows that both terms are significant even after allowing for the effect of the other.  
+
+Now examine the model coefficients:
+```{r}
+summary(lmodp)
+```
+
+- "Isolated" is the reference level.  
+- The intercepts of "one" and "many" are not significantly different from this reference level.  
+- The low sexual activity group, "low," survives about seven days less.  
+- The p-value is 0.02 and is enough for statistical significance if only one comparison is made.  
+- However, we are making more than one comparison, and so, as with outliers, a Bonferroni-type adjustment might be considered. This would erase the statistical significance of the difference.  
+- However, the high sexual activity group, "high," has a life span 20 days less than the reference group and this is strongly significant.  
+
+Returning to the diagnostics:
+```{r}
+plot(residuals(lmodp) ~fitted(lmodp),pch=unclass(fruitfly$activity),
+     xlab="Fitted",ylab="Residuals")
+abline(h=0)
+```
+
+We have some non-constant variance although it does not appear to be related to the five groups.  
+
+A log transformation can remove the heteroscedasticity:
+```{r}
+lmod1 <- lm(log(longevity) ~ thorax+activity, fruitfly)
+plot(residuals(lmod1) ~ fitted(lmod1),pch=unclass(fruitfly$activity),
+     xlab="Fitted",ylab="Residuals")
+abline(h=0)
+```
+
+One disadvantage of transformation is that it can make interpretation of the model more difficult.  
+
+Let's examine the model fit:
+```{r}
+summary(lmod1)
+```
+
+Notice that the $R^2$ is higher for this model, but the p-values are similar.  
+
+Because of the log transformation, we can interpret the coefficients as having a multiplicative effect:
+```{r}
+exp(coef(lmod1)[3:6])
+```
+
+
+Compared to the reference level, we see that the high sexual activity group has 0.66 times the life span (i.e., 34% less).  
+
+Why did we include `thorax` in the model?  
+
+Its effect on longevity was known, but because of the random assignment of the files to the groups, this variable will not bias the estimates of the effects of the activities.  
+
+We can verify that `thorax` is unrelated to the activities:
+```{r}
+lmodh <- lm(thorax ~ activity, fruitfly)
+anova(lmodh)
+```
+
+However, look what happens if we omit `thorax` from the model for `longevity`:
+```{r}
+lmodu <- lm(log(longevity) ~ activity, fruitfly)
+sumary(lmodu)
+```
+
+The magnitudes of the effects do not change that much but the standard errors are substantially larger. The value of including `thorax` in this model is to increase the precision of the estimates.
