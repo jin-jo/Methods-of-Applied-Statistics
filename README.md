@@ -13,3 +13,4 @@ Advanced topics in statistics and data analysis with emphasis on applications.
 - One Factor Models
 - Models with Several Factors
 - Experiments with Blocks
+- Analysis of Covariance
