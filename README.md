@@ -1,6 +1,5 @@
 # Methods-of-Applied-Statistics
 Advanced topics in statistics and data analysis with emphasis on applications.
-- A breif introduction to R
 - Styles of data analysis
 - Statistical models
 - Estimation
